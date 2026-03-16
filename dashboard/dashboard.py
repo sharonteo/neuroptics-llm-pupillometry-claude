@@ -38,56 +38,71 @@ def load_label_classes():
 
 
 # ---------------------------------------------------------
-# FDA-style narrative generation
+# FDA-style SYSTEM-LEVEL narrative generation
 # ---------------------------------------------------------
-def generate_narrative_fda(patient, predictions):
+def generate_narrative_fda(df, artifacts):
     from src.llm_claude import call_claude
 
-    patient_dict = patient.to_dict()
+    # Dataset summaries
+    severity_dist = df["severity"].value_counts().to_dict()
+    diagnosis_dist = df["diagnosis"].value_counts().to_dict()
+    feature_summary = df.describe(include="all").to_dict()
 
-    # Build compact model output summary
-    model_lines = []
-    for model_name, info in predictions.items():
-        model_lines.append(
-            f"{model_name}: predicted {info['Prediction']} "
-            f"(mild={info['P(mild)']:.2f}, moderate={info['P(moderate)']:.2f}, severe={info['P(severe)']:.2f})"
+    # Model performance summaries
+    model_summaries = []
+    for model_name, metrics in artifacts.items():
+        report = metrics["report"]
+        cm = metrics["cm"]
+
+        model_summaries.append(
+            f"{model_name}:\n"
+            f"- Classification report:\n{report.to_string()}\n"
+            f"- Confusion matrix:\n{cm.to_string()}\n"
         )
-    model_outputs_text = "\n".join(model_lines)
+
+    model_text = "\n".join(model_summaries)
 
     prompt = f"""
 You are drafting text suitable for inclusion in an FDA submission (e.g., 510(k) or De Novo) for a clinical decision support (CDS) tool based on automated pupillometry.
 
-Patient information:
-{patient_dict}
+Generate a concise, neutral, FDA-style narrative summarizing the *entire dataset* and *overall model performance*, not an individual patient.
 
-Model outputs:
-{model_outputs_text}
+Dataset characteristics:
+- Severity distribution: {severity_dist}
+- Diagnosis distribution: {diagnosis_dist}
+- Feature summary statistics: {feature_summary}
 
-Generate a concise, neutral, FDA-style narrative with the following sections:
+Model performance:
+{model_text}
 
-1. Patient Overview
-   - Summarize demographics, diagnosis, and key clinical context.
-   - Include GCS and severity labels without interpretation.
+Generate a structured narrative with the following sections:
+
+1. System Overview
+   - Describe the purpose of the CDS tool.
+   - Summarize the dataset used for development and evaluation.
+   - Clarify that the system analyzes automated pupillometry measurements.
 
 2. Model Inputs and Data Characteristics
-   - Describe the pupillometry features used.
-   - Note any measurement variability or asymmetry without clinical interpretation.
+   - Summarize the pupillometry features included in the dataset.
+   - Describe measurement ranges and variability without clinical interpretation.
+   - Note demographic representation and potential sources of variability.
 
-3. Model Output
-   - Summarize predicted class and probability distribution.
-   - Emphasize that model agreement does not imply clinical validity.
+3. Model Performance Summary
+   - Summarize performance across all models.
+   - Describe general trends in accuracy, precision/recall, and class balance.
+   - Emphasize that performance metrics are dataset-specific and may vary in real-world settings.
 
-4. Performance Context
+4. Intended Use and Performance Context
    - Describe the intended use of the system as a supportive CDS tool.
    - Clarify that outputs are adjunctive and not diagnostic.
-   - Note that model performance varies across populations, devices, and clinical settings.
+   - Note that model performance may vary across populations, devices, and clinical environments.
    - State that the system is not intended to replace clinician judgment.
 
 5. Limitations and Appropriate Use
    - Describe known limitations of automated pupillometry and ML-based CDS tools.
    - Emphasize that outputs should be interpreted within the broader clinical context.
    - Note that the system does not provide treatment recommendations.
-   - Highlight that the model may be sensitive to data quality, device variability, and patient-specific factors.
+   - Highlight that the model may be sensitive to data quality, device variability, and population differences.
 
 Requirements:
 - Use formal, regulatory-appropriate language.
@@ -100,7 +115,6 @@ Return only the narrative text.
 """
 
     return call_claude(prompt)
-
 
 
 # ---------------------------------------------------------
@@ -209,40 +223,16 @@ with tabs[2]:
 
 
 # ---------------------------------------------------------
-# Tab 4: FDA-Style Narrative Summary
+# Tab 4: FDA-Style Narrative Summary (SYSTEM LEVEL)
 # ---------------------------------------------------------
 with tabs[3]:
     st.header("Narrative Summary (FDA-style)")
 
-    patient_id_narr = st.selectbox(
-        "Select Patient ID for Narrative",
-        df["patient_id"].unique(),
-        key="narrative_patient"
-    )
-    patient_narr = df[df["patient_id"] == patient_id_narr].iloc[0]
-
-    input_df_narr = patient_narr.drop(labels=["patient_id", "severity"]).to_frame().T
-
-    predictions = {}
-    for model_name, metrics in artifacts.items():
-        model_path = metrics["model_path"]
-        if os.path.exists(model_path):
-            model = joblib.load(model_path)
-            pred = model.predict(input_df_narr)[0]
-            proba = model.predict_proba(input_df_narr)[0]
-
-            predictions[model_name] = {
-                "Prediction": label_classes[pred],
-                "P(mild)": proba[label_classes.index("mild")],
-                "P(moderate)": proba[label_classes.index("moderate")],
-                "P(severe)": proba[label_classes.index("severe")]
-            }
-
-    if st.button("Generate FDA-Style Narrative"):
-        if not predictions:
+    if st.button("Generate FDA-Style System Narrative"):
+        if not artifacts:
             st.warning("No trained models available to generate a narrative.")
         else:
             with st.spinner("Generating narrative..."):
-                narrative_text = generate_narrative_fda(patient_narr, predictions)
-            st.subheader("Clinical Narrative (Regulatory Style)")
+                narrative_text = generate_narrative_fda(df, artifacts)
+            st.subheader("System-Level FDA Narrative")
             st.write(narrative_text)
