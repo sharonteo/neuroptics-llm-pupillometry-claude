@@ -43,12 +43,10 @@ def load_label_classes():
 def generate_narrative_fda(df, artifacts):
     from src.llm_claude import call_claude
 
-    # Dataset summaries
     severity_dist = df["severity"].value_counts().to_dict()
     diagnosis_dist = df["diagnosis"].value_counts().to_dict()
     feature_summary = df.describe(include="all").to_dict()
 
-    # Model performance summaries
     model_summaries = []
     for model_name, metrics in artifacts.items():
         report = metrics["report"]
@@ -78,39 +76,12 @@ Model performance:
 Generate a structured narrative with the following sections:
 
 1. System Overview
-   - Describe the purpose of the CDS tool.
-   - Summarize the dataset used for development and evaluation.
-   - Clarify that the system analyzes automated pupillometry measurements.
-
 2. Model Inputs and Data Characteristics
-   - Summarize the pupillometry features included in the dataset.
-   - Describe measurement ranges and variability without clinical interpretation.
-   - Note demographic representation and potential sources of variability.
-
 3. Model Performance Summary
-   - Summarize performance across all models.
-   - Describe general trends in accuracy, precision/recall, and class balance.
-   - Emphasize that performance metrics are dataset-specific and may vary in real-world settings.
-
 4. Intended Use and Performance Context
-   - Describe the intended use of the system as a supportive CDS tool.
-   - Clarify that outputs are adjunctive and not diagnostic.
-   - Note that model performance may vary across populations, devices, and clinical environments.
-   - State that the system is not intended to replace clinician judgment.
-
 5. Limitations and Appropriate Use
-   - Describe known limitations of automated pupillometry and ML-based CDS tools.
-   - Emphasize that outputs should be interpreted within the broader clinical context.
-   - Note that the system does not provide treatment recommendations.
-   - Highlight that the model may be sensitive to data quality, device variability, and population differences.
 
-Requirements:
-- Use formal, regulatory-appropriate language.
-- Do NOT provide treatment recommendations or clinical management advice.
-- Emphasize that the tool is supportive and not a standalone diagnostic.
-- Acknowledge uncertainty and potential limitations.
-- Refer to "the system" or "the model" rather than "I".
-
+Use formal, regulatory-appropriate language.
 Return only the narrative text.
 """
 
@@ -125,8 +96,10 @@ st.title("🧠 Pupillometry Clinical Dashboard")
 
 df = load_dataset()
 
-# 🔥 FIX: Make all object columns strings to avoid Arrow serialization errors
-df = df.astype(str)
+# 🔥 FIX: Convert only object columns to string (preserve numeric columns)
+for col in df.columns:
+    if df[col].dtype == "object":
+        df[col] = df[col].astype(str)
 
 artifacts = load_artifacts()
 label_classes = load_label_classes()
@@ -151,7 +124,7 @@ with tabs[0]:
 
     st.subheader("NPI Distribution")
     fig, ax = plt.subplots(figsize=(8, 4))
-    sns.histplot(df["npi"], kde=True, bins=40, ax=ax)
+    sns.histplot(df["npi"].astype(float), kde=True, bins=40, ax=ax)
     st.pyplot(fig)
 
     st.subheader("Pupil Size (Left vs Right)")
