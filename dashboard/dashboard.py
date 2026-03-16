@@ -124,6 +124,10 @@ st.set_page_config(page_title="Pupillometry Clinical Dashboard", layout="wide")
 st.title("🧠 Pupillometry Clinical Dashboard")
 
 df = load_dataset()
+
+# 🔥 FIX: Make all object columns strings to avoid Arrow serialization errors
+df = df.astype(str)
+
 artifacts = load_artifacts()
 label_classes = load_label_classes()
 
