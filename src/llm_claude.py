@@ -1,8 +1,8 @@
 import os
-import anthropic
+from anthropic import Anthropic
 
 # Initialize Anthropic client using your environment variable
-client = anthropic.Anthropic(
+client = Anthropic(
     api_key=os.getenv("ANTHROPIC_API_KEY")
 )
 
@@ -15,7 +15,7 @@ def call_claude(prompt: str) -> str:
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-6",   # <-- your available model
+            model="claude-sonnet-4-6",
             max_tokens=1200,
             temperature=0.2,
             messages=[
